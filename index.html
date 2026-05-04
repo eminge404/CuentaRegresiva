@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Countdown</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #e8001a;
+    --red-dim: #7a0010;
+    --red-glow: rgba(232,0,26,0.18);
+    --bg: #000;
+    --text: #fff;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* vignette */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+    z-index: 11;
+  }
+
+  .stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    z-index: 5;
+  }
+
+  /* top label */
+  .label-top {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(10px, 1.4vw, 15px);
+    letter-spacing: 0.45em;
+    color: var(--red-dim);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    animation: pulse-dim 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dim {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+
+  /* main blocks row */
+  .blocks {
+    display: flex;
+    align-items: flex-start;
+    gap: clamp(8px, 2vw, 28px);
+  }
+
+  .block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .block-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(56px, 11vw, 148px);
+    line-height: 1;
+    color: var(--red);
+    text-shadow:
+      0 0 8px var(--red-glow),
+      0 0 24px var(--red-glow),
+      0 0 60px rgba(232,0,26,0.08);
+    letter-spacing: 0.03em;
+    transition: color 0.1s;
+    min-width: 2ch;
+    text-align: center;
+  }
+
+  .block-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(9px, 1.1vw, 13px);
+    letter-spacing: 0.35em;
+    color: var(--red-dim);
+    text-transform: uppercase;
+  }
+
+  /* separator colon */
+  .sep {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 9vw, 128px);
+    line-height: 1;
+    color: var(--red-dim);
+    padding-top: 2px;
+    animation: blink 1s step-start infinite;
+    align-self: flex-start;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.15; }
+  }
+
+  /* milliseconds — smaller, separate row */
+  .ms-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 2px;
+    gap: 4px;
+  }
+
+  .ms-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(28px, 4.5vw, 64px);
+    line-height: 1;
+    color: var(--red-dim);
+    letter-spacing: 0.06em;
+    min-width: 3ch;
+    text-align: center;
+  }
+
+  .ms-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(8px, 0.9vw, 11px);
+    letter-spacing: 0.35em;
+    color: #3a0008;
+    text-transform: uppercase;
+  }
+
+  /* thin red line under blocks */
+  .line {
+    width: 100%;
+    height: 1px;
+    background: var(--red-dim);
+    margin-top: 18px;
+    opacity: 0.4;
+  }
+
+  /* bottom label */
+  .label-bottom {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(9px, 1vw, 12px);
+    letter-spacing: 0.4em;
+    color: #2a0008;
+    text-transform: uppercase;
+    margin-top: 14px;
+  }
+
+  /* ── zero state ── */
+  .zero-screen {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+
+  .zero-screen.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .te-amo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(72px, 18vw, 220px);
+    color: var(--red);
+    text-shadow:
+      0 0 20px var(--red-glow),
+      0 0 60px rgba(232,0,26,0.2);
+    letter-spacing: 0.06em;
+    animation: heartbeat 1.2s ease-in-out infinite;
+  }
+
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.07); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.04); }
+    70% { transform: scale(1); }
+  }
+
+  /* ── confetti canvas ── */
+  #confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 99;
+  }
+
+  /* flash on tick */
+  @keyframes flash {
+    0% { color: #fff; }
+    100% { color: var(--red); }
+  }
+
+  .flash { animation: flash 0.12s ease-out forwards; }
+</style>
+</head>
+<body>
+
+<canvas id="confetti"></canvas>
+
+<div class="stage" id="stage">
+  <div class="label-top">time remaining</div>
+
+  <div class="blocks">
+    <div class="block">
+      <div class="block-value" id="days">00</div>
+      <div class="block-label">days</div>
+    </div>
+
+    <div class="sep">:</div>
+
+    <div class="block">
+      <div class="block-value" id="hours">00</div>
+      <div class="block-label">hours</div>
+    </div>
+
+    <div class="sep">:</div>
+
+    <div class="block">
+      <div class="block-value" id="minutes">00</div>
+      <div class="block-label">minutes</div>
+    </div>
+
+    <div class="sep">:</div>
+
+    <div class="block">
+      <div class="block-value" id="seconds">00</div>
+      <div class="block-label">seconds</div>
+    </div>
+  </div>
+
+  <div class="ms-row">
+    <div class="ms-value" id="ms">000</div>
+    <div class="ms-label">milliseconds</div>
+  </div>
+
+  <div class="line"></div>
+  <div class="label-bottom">jun 20 · 17:00 cdt</div>
+</div>
+
+<div class="zero-screen" id="zeroScreen">
+  <div class="te-amo">te amo</div>
+</div>
+
+<script>
+  // Target: June 20 2025, 17:00 CDT (UTC-5)
+  // CDT = UTC-5, so 17:00 CDT = 22:00 UTC
+  const TARGET = new Date('2025-06-20T22:00:00.000Z');
+
+  const elDays    = document.getElementById('days');
+  const elHours   = document.getElementById('hours');
+  const elMinutes = document.getElementById('minutes');
+  const elSeconds = document.getElementById('seconds');
+  const elMs      = document.getElementById('ms');
+  const zeroScreen= document.getElementById('zeroScreen');
+  const canvas    = document.getElementById('confetti');
+  const ctx       = canvas.getContext('2d');
+
+  let lastSec = -1;
+  let confettiActive = false;
+  let confettiParticles = [];
+  let zeroed = false;
+
+  function pad(n, digits) {
+    return String(n).padStart(digits, '0');
+  }
+
+  function tick() {
+    const now  = Date.now();
+    const diff = TARGET.getTime() - now;
+
+    if (diff <= 0 && !zeroed) {
+      zeroed = true;
+      elDays.textContent    = '00';
+      elHours.textContent   = '00';
+      elMinutes.textContent = '00';
+      elSeconds.textContent = '00';
+      elMs.textContent      = '000';
+      zeroScreen.classList.add('active');
+      launchConfetti();
+      return;
+    }
+
+    if (diff <= 0) return;
+
+    const totalMs  = diff;
+    const ms       = totalMs % 1000;
+    const totalSec = Math.floor(totalMs / 1000);
+    const secs     = totalSec % 60;
+    const totalMin = Math.floor(totalSec / 60);
+    const mins     = totalMin % 60;
+    const totalHr  = Math.floor(totalMin / 60);
+    const hrs      = totalHr % 24;
+    const days     = Math.floor(totalHr / 24);
+
+    elDays.textContent    = pad(days, 2);
+    elHours.textContent   = pad(hrs, 2);
+    elMinutes.textContent = pad(mins, 2);
+    elMs.textContent      = pad(Math.floor(ms), 3);
+
+    if (secs !== lastSec) {
+      lastSec = secs;
+      elSeconds.textContent = pad(secs, 2);
+      // brief flash on second change
+      elSeconds.classList.remove('flash');
+      void elSeconds.offsetWidth;
+      elSeconds.classList.add('flash');
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // ── Confetti ──────────────────────────────────────────────────────────────
+  const COLORS = ['#e8001a','#ff4466','#ff0033','#ffffff','#ff6688','#cc0015','#ff2244'];
+
+  function launchConfetti() {
+    confettiActive = true;
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    for (let i = 0; i < 220; i++) {
+      confettiParticles.push({
+        x:  Math.random() * canvas.width,
+        y:  -20 - Math.random() * canvas.height * 0.5,
+        w:  4 + Math.random() * 9,
+        h:  6 + Math.random() * 14,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.18,
+        vx: (Math.random() - 0.5) * 3,
+        vy: 1.5 + Math.random() * 4.5,
+        opacity: 0.85 + Math.random() * 0.15,
+        wobble: Math.random() * Math.PI * 2,
+        wobbleSpeed: 0.04 + Math.random() * 0.06,
+      });
+    }
+
+    animateConfetti();
+  }
+
+  function animateConfetti() {
+    if (!confettiActive) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let alive = 0;
+    confettiParticles.forEach(p => {
+      p.y += p.vy;
+      p.x += p.vx + Math.sin(p.wobble) * 1.2;
+      p.rot += p.rotSpeed;
+      p.wobble += p.wobbleSpeed;
+      p.vy += 0.04; // gravity
+
+      if (p.y < canvas.height + 40) alive++;
+
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+
+    if (alive > 0) requestAnimationFrame(animateConfetti);
+    else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    if (confettiActive) {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+  });
+
+  tick();
+</script>
+</body>
+</html>
